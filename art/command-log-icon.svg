@@ -9,27 +9,19 @@
   <!-- Terminal window -->
   <rect x="32" y="32" width="960" height="960" rx="200" fill="url(#bg)"/>
 
-  <!-- Chat side: a prompt and a cursor -->
-  <path d="M150 452 L232 512 L150 572" fill="none" stroke="#8b93a7" stroke-width="44"
+  <!-- Chat side: a bold prompt and cursor -->
+  <path d="M124 428 L226 512 L124 596" fill="none" stroke="#8b93a7" stroke-width="64"
         stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="270" y="548" width="110" height="40" rx="20" fill="#8b93a7"/>
+  <rect x="262" y="566" width="104" height="58" rx="29" fill="#8b93a7"/>
 
   <!-- The pane on the right -->
-  <rect x="470" y="150" width="402" height="724" rx="64" fill="#2c3346"/>
+  <rect x="410" y="150" width="470" height="724" rx="72" fill="#323a50"/>
 
-  <!-- Entry 1: done -->
-  <path d="M528 262 L558 292 L614 232" fill="none" stroke="#5fd38d" stroke-width="30"
+  <!-- A done command: a large check over two thick lines of output -->
+  <path d="M494 330 L572 408 L728 252" fill="none" stroke="#5fd38d" stroke-width="72"
         stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="644" y="246" width="176" height="32" rx="16" fill="#c9cfdc"/>
-  <rect x="528" y="330" width="250" height="24" rx="12" fill="#6d7690"/>
-  <rect x="528" y="378" width="200" height="24" rx="12" fill="#6d7690"/>
-
-  <!-- Entry 2: running in the background -->
-  <circle cx="571" cy="510" r="34" fill="none" stroke="#7aa2f7" stroke-width="28"
-          stroke-dasharray="160 54" stroke-linecap="round"/>
-  <rect x="644" y="494" width="176" height="32" rx="16" fill="#c9cfdc"/>
-  <rect x="528" y="578" width="280" height="24" rx="12" fill="#6d7690"/>
-  <rect x="528" y="626" width="220" height="24" rx="12" fill="#6d7690"/>
-  <rect x="528" y="674" width="250" height="24" rx="12" fill="#6d7690"/>
-  <rect x="528" y="722" width="140" height="24" rx="12" fill="#7aa2f7"/>
+  <rect x="486" y="500" width="320" height="64" rx="32" fill="#c9cfdc"/>
+  <rect x="486" y="610" width="240" height="64" rx="32" fill="#c9cfdc"/>
+  <!-- Live output still arriving -->
+  <rect x="486" y="720" width="164" height="64" rx="32" fill="#7aa2f7"/>
 </svg>
