@@ -8,6 +8,9 @@ const TITLE = 'Command log'
 const MAX_ENTRIES = 30
 const MAX_OUTPUT = 20000
 const MAX_FOLLOWED = 5
+// A pane draws the first 100,000 characters of its texts: keep the newest
+// rows within this, so the oldest drop off the top rather than mid-row.
+const MAX_DRAWN = 90000
 
 const entries = atom({ plugin: 'command-log', key: 'entries' } as const, [])
 
@@ -119,7 +122,15 @@ async function record($: EngineInterface, id: string, command: string, descripti
   } else {
     await update($, entries, list => [...list.filter(isLive), entry])
   }
-  if (!isClosedByPerson) void $.ui.open({ id: PANE, title: TITLE })
+  if (!isClosedByPerson) void open($)
+}
+
+// Opens the pane (or keeps it open) and brings its newest rows into view.
+async function open($: EngineInterface) {
+  await $.ui.open({ id: PANE, title: TITLE })
+  try {
+    await $.ui.scroll({ in: PANE, to: 'end' })
+  } catch {}
 }
 
 async function settle($: EngineInterface, id: string, ran: ToolCallResult<'Bash'>) {
@@ -196,7 +207,7 @@ export const register: Register = (on, options) => {
       return { text: 'Command log pane closed. `/logpane` opens it again.' }
     }
     isClosedByPerson = false
-    await $.ui.open({ id: PANE, title: TITLE })
+    await open($)
 
     return { text: 'Command log pane opened.' }
   })
@@ -241,7 +252,6 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
     const list = await read($, entries)
     const width = Math.max(10, e.props.bodyColumns)
-    const room = Math.max(1, e.props.scroll.bodyRows)
 
     const rows: { text: string; color?: string; dim?: boolean; bold?: boolean }[] = []
     for (const one of list) {
@@ -258,10 +268,16 @@ export const register: Register = (on, options) => {
       }
     }
 
+    // Every row is drawn and the pane scrolls over them, newest within budget.
+    let first = rows.length
+    for (let used = 0; first > 0 && used + rows[first - 1]!.text.length <= MAX_DRAWN; first--) {
+      used += rows[first - 1]!.text.length
+    }
+
     return (
       <Box flexDirection="column">
         {rows.length === 0 && <Text dimColor>No commands yet.</Text>}
-        {rows.slice(-room).map(row => (
+        {rows.slice(first).map(row => (
           <Text wrap="truncate-end" color={row.color} dimColor={row.dim} bold={row.bold}>
             {row.text || ' '}
           </Text>

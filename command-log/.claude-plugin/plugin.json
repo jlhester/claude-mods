@@ -1,6 +1,6 @@
 {
   "name": "command-log",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "description": "A side pane showing the Bash commands Claude runs and their output, live for background commands",
   "author": { "name": "Jess Hester", "email": "jess@jesshester.com" },
