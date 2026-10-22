@@ -1,0 +1,6 @@
+{
+  "name": "claude-mods",
+  "description": "Jess Hester's Claude Code mods",
+  "owner": { "name": "Jess Hester", "email": "jess@jesshester.com" },
+  "plugins": [{ "name": "command-log", "source": "./command-log" }]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "command-log",
+  "version": "0.2.0",
+  "license": "MIT",
+  "description": "A side pane showing the Bash commands Claude runs and their output, live for background commands",
+  "author": { "name": "Jess Hester", "email": "jess@jesshester.com" },
+  "userConfig": {
+    "keep_history": {
+      "type": "boolean",
+      "title": "Keep history",
+      "description": "Keep finished commands in the pane (up to 30). Off: show running commands, plus the last finished ones until the next command starts",
+      "default": false
+    }
+  },
+  "types": "./types/index.d.ts"
+}
