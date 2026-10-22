@@ -165,7 +165,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'logpane',
-      description: 'Show the command log pane (`/logpane clear` empties it)',
+      description:
+        'Show the command log pane (`close` closes it, `clear` empties it, `history [on|off]` keeps finished commands)',
     })
 
     return next(e)
@@ -175,6 +176,24 @@ export const register: Register = (on, options) => {
     if (/\bclear\b/.test(e.args)) {
       await clear($)
       return { text: 'Command log cleared.' }
+    }
+    // Keep history is a /config row: setting it there reloads the mod with it.
+    if (/\bhistory\b/.test(e.args)) {
+      const value = /\bon\b/.test(e.args) ? true : /\boff\b/.test(e.args) ? false : !isKeepingHistory
+      const row = (await $.config.list()).find(
+        one => one.key.startsWith('command-log') && one.key.endsWith('.keep_history'),
+      )
+      if (!row) return { text: 'Keep history setting not found; change it in /config.' }
+      const set = await $.config.set({ key: row.key, value })
+      if ('deny' in set && set.deny) return { text: `Keep history not changed: ${set.deny}` }
+
+      return { text: `Keep history ${value ? 'on' : 'off'}.` }
+    }
+    // Closed by command, it stays closed as if the person had closed it.
+    if (/\bclose\b/.test(e.args)) {
+      isClosedByPerson = true
+      await $.ui.close({ id: PANE })
+      return { text: 'Command log pane closed. `/logpane` opens it again.' }
     }
     isClosedByPerson = false
     await $.ui.open({ id: PANE, title: TITLE })

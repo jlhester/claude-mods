@@ -31,9 +31,9 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 
 ### Use
 
-- The pane opens by itself the first time Claude runs a Bash command. `/logpane` opens it again after you close it, and `/logpane clear` empties it.
+- The pane opens by itself the first time Claude runs a Bash command. `/logpane close` closes it, and it stays closed until `/logpane` opens it again. `/logpane clear` empties it.
 - The pane sits on the right in fullscreen mode (`/tui fullscreen`) in a terminal at least 110 columns wide; otherwise it sits above the prompt.
-- **Keep history** (off by default) is under `/plugin` → command-log.
+- **Keep history** (off by default): `/logpane history` turns it on or off, and `/logpane history on` or `off` sets it. It is also a row in `/config`.
 
 ### Limits
 
