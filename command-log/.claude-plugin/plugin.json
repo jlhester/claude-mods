@@ -4,6 +4,9 @@
   "license": "MIT",
   "description": "A side pane showing the Bash commands Claude runs and their output, live for background commands",
   "author": { "name": "Jess Hester", "email": "jess@jesshester.com" },
+  "homepage": "https://github.com/jlhester/claude-mods",
+  "repository": "https://github.com/jlhester/claude-mods",
+  "keywords": ["bash", "terminal", "commands", "logs", "output", "pane", "sidebar", "background", "monitoring"],
   "userConfig": {
     "keep_history": {
       "type": "boolean",

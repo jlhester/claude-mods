@@ -2,5 +2,11 @@
   "name": "claude-mods",
   "description": "Jess Hester's Claude Code mods",
   "owner": { "name": "Jess Hester", "email": "jess@jesshester.com" },
-  "plugins": [{ "name": "command-log", "source": "./command-log" }]
+  "plugins": [{
+      "name": "command-log",
+      "source": "./command-log",
+      "description": "A side pane showing the Bash commands Claude runs and their output, live for background commands",
+      "category": "developer-tools",
+      "tags": ["bash", "terminal", "commands", "logs", "output", "pane", "sidebar", "background", "monitoring"]
+    }]
 }
