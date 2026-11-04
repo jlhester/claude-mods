@@ -285,8 +285,8 @@ test('/logpane clear empties the pane', async ($, on) => {
 test('/logpane history sets the /config row', async ($, on) => {
   engine(on)
   const sets: unknown[] = []
-  on('config.list', () => ({ value: [{ key: 'command-log@x.keep_history' }] }))
   on('config.set', (_: unknown, e: any) => {
+    expect(e.key).toBe('command-log.keep_history')
     sets.push(e.value)
     return { value: e.value }
   })
