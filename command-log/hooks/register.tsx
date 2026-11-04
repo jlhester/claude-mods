@@ -290,11 +290,7 @@ export const register: Register = (on, options) => {
         if (value !== undefined && value !== 'on' && value !== 'off') return { text: USAGE }
         // Keep history is a /config row: setting it there reloads the mod with it.
         const isOn = value === undefined ? !isKeepingHistory : value === 'on'
-        const row = (await $.config.list()).find(
-          one => one.key.startsWith('command-log') && one.key.endsWith('.keep_history'),
-        )
-        if (!row) return { text: 'Keep history setting not found; change it in /config.' }
-        const set = await $.config.set({ key: row.key, value: isOn })
+        const set = await $.config.set({ key: 'command-log.keep_history', value: isOn })
         if ('deny' in set && set.deny) return { text: `Keep history not changed: ${set.deny}` }
 
         return { text: `Keep history ${isOn ? 'on' : 'off'}.` }
