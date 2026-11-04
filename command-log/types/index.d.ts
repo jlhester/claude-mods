@@ -10,6 +10,6 @@ export type LogEntry = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'command-log': { entries: LogEntry[] }
+    'command-log': { entries: LogEntry[]; isPromptAnswered: boolean }
   }
 }

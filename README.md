@@ -35,7 +35,8 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 
 - The pane opens by itself the first time Claude runs a Bash command. `/logpane close` closes it, and it stays closed until `/logpane` opens it again. `/logpane clear` empties it.
 - The pane scrolls: use the mouse wheel, or click it (or press `ctrl+x tab`) and use the arrow keys or Page Up/Down. It opens at the newest output and follows new lines while you are at the bottom.
-- The pane sits on the right in fullscreen mode (`/tui fullscreen`) in a terminal at least 110 columns wide; otherwise it sits above the prompt.
+- The pane sits on the right in fullscreen mode in a terminal at least 110 columns wide; otherwise it sits above the prompt. Outside fullscreen the pane asks once whether to switch. `/logpane fullscreen` switches at any time. It runs `/tui fullscreen`, which applies to all your sessions and restarts this one; `/tui default` switches back.
+- Opening by itself takes a terminal 144 columns wide, or 110 once you have opened the pane with `/logpane`. `/logpane` opens it at any width.
 - **Keep history** (off by default): `/logpane history` turns it on or off, and `/logpane history on` or `off` sets it. It is also a row in `/config`.
 
 ### Limits
