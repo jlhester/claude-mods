@@ -11,6 +11,7 @@ const MAX_FOLLOWED = 5
 // A pane draws the first 100,000 characters of its texts: keep the newest
 // rows within this, so the oldest drop off the top rather than mid-row.
 const MAX_DRAWN = 90000
+const USAGE = 'Usage: /logpane [close | clear | fullscreen | history [on|off]]'
 
 // The fullscreen question is asked once per install: the answer is kept in the
 // store across sessions, and in this atom so that answering redraws the pane.
@@ -18,6 +19,11 @@ const ANSWERED_KEY = 'fullscreen-prompt-answered'
 // Set just before /tui relaunches: the new process opens the pane again, as
 // nothing else would until Claude's next command.
 const REOPEN_KEY = 'reopen-after-fullscreen'
+// Kept in the store so a closed pane stays closed through reloads and sessions.
+const CLOSED_KEY = 'closed-by-person'
+// A pane opened unasked waits undrawn on a narrow terminal: say so, once.
+const WAITING_HINT_KEY = 'waiting-hint-shown'
+const WAITING_HINT = 'The command log is waiting for a wider terminal. Run /logpane to show it now.'
 const NOT_DOCKED = 'Now in fullscreen. Run /logpane to show the command log.'
 const FULLSCREEN_MANUALLY = 'Could not switch to fullscreen: type /tui fullscreen instead.'
 
@@ -42,6 +48,7 @@ const followed = new Map<string, () => Promise<unknown>>()
 const outputPaths = new Map<string, string>()
 let isClosedByPerson = false
 let isKeepingHistory = false
+let isWaitingHintDue = false
 
 // Strips colour codes and keeps only what a carriage return left on each line.
 function clean(text: string): string {
@@ -50,6 +57,18 @@ function clean(text: string): string {
     .split('\n')
     .map(line => line.slice(line.lastIndexOf('\r') + 1))
     .join('\n')
+}
+
+// What a text row may hold: the engine refuses a whole drawing over one control
+// character. Run at drawing so a sequence split across two reads is caught whole.
+function printable(text: string): string {
+  return text
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, '')
+    .replace(/\x1b[PX^_][^\x1b]*(?:\x1b\\)?/g, '')
+    .replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]?/g, '')
+    .replace(/\x1b[ -\/]*[0-~]?/g, '')
+    .replace(/\t/g, '    ')
+    .replace(/[\x00-\x1f\x7f-\x9f]/g, '')
 }
 
 // Splits a line into rows of at most `width` cells, continuing under `indent`.
@@ -132,15 +151,31 @@ async function record($: EngineInterface, id: string, command: string, descripti
   } else {
     await update($, entries, list => [...list.filter(isLive), entry])
   }
-  if (!isClosedByPerson) void open($)
+  if (!isClosedByPerson) void openUnasked($)
 }
 
-// Opens the pane (or keeps it open) and brings its newest rows into view.
-async function open($: EngineInterface) {
-  await $.ui.open({ id: PANE, title: TITLE })
+async function openUnasked($: EngineInterface) {
+  const isPlaced = await open($)
+  if (isPlaced || !isWaitingHintDue) return
+  isWaitingHintDue = false
+  await $.store.set(WAITING_HINT_KEY, true)
+  $.ui.toast(WAITING_HINT)
+}
+
+async function setClosed($: EngineInterface, isClosed: boolean) {
+  isClosedByPerson = isClosed
+  await $.store.set(CLOSED_KEY, isClosed)
+}
+
+// Opens the pane (or keeps it open), brings its newest rows into view, and says
+// whether it is drawn.
+async function open($: EngineInterface): Promise<boolean> {
+  const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
   try {
     await $.ui.scroll({ in: PANE, to: 'end' })
   } catch {}
+
+  return isPlaced
 }
 
 async function settle($: EngineInterface, id: string, ran: ToolCallResult<'Bash'>) {
@@ -198,6 +233,7 @@ async function switchToFullscreen($: EngineInterface) {
 async function reopenAfterSwitch($: EngineInterface) {
   if ((await $.store.get(REOPEN_KEY)) !== true) return
   await $.store.delete(REOPEN_KEY)
+  await setClosed($, false)
   const opened = await $.ui.open({ id: PANE, title: TITLE })
   if (!opened.isPlaced) $.ui.toast(NOT_DOCKED)
 }
@@ -211,55 +247,65 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'logpane',
-      description:
-        'Show the command log pane (`close` closes it, `clear` empties it, `history [on|off]` keeps finished commands, `fullscreen` moves it to the right)',
+      description: 'Show the pane of Bash commands Claude runs',
+      argumentHint: '[close | clear | fullscreen | history [on|off]]',
     })
     if ((await $.store.get(ANSWERED_KEY)) === true) await update($, isPromptAnswered, () => true)
+    isClosedByPerson = (await $.store.get(CLOSED_KEY)) === true
+    isWaitingHintDue = (await $.store.get(WAITING_HINT_KEY)) !== true
     void reopenAfterSwitch($)
 
     return next(e)
   })
 
   on('command.run', { command: 'logpane' }, async ($, e) => {
-    if (/\bclear\b/.test(e.args)) {
-      await clear($)
-      return { text: 'Command log cleared.' }
-    }
-    if (/\bfullscreen\b/.test(e.args)) {
-      if (e.presentation.isFullscreen) {
-        return { text: 'Already in fullscreen. The pane docks on the right at 110 columns or wider.' }
+    const [action = '', value, ...rest] = e.args.trim().split(/\s+/).filter(Boolean)
+    if (rest.length > 0 || (value !== undefined && action !== 'history')) return { text: USAGE }
+
+    switch (action) {
+      case '':
+        await setClosed($, false)
+        await open($)
+
+        return { text: 'Command log pane opened.' }
+      case 'clear':
+        await clear($)
+
+        return { text: 'Command log cleared.' }
+      case 'close':
+        // Closed by command, it stays closed as if the person had closed it.
+        await setClosed($, true)
+        await $.ui.close({ id: PANE })
+
+        return { text: 'Command log pane closed. `/logpane` opens it again.' }
+      case 'fullscreen':
+        if (e.presentation.isFullscreen) {
+          return { text: 'Already in fullscreen. The pane docks on the right at 110 columns or wider.' }
+        }
+        await answerPrompt($)
+        await switchToFullscreen($)
+
+        return { text: 'Switching to fullscreen. This session restarts.' }
+      case 'history': {
+        if (value !== undefined && value !== 'on' && value !== 'off') return { text: USAGE }
+        // Keep history is a /config row: setting it there reloads the mod with it.
+        const isOn = value === undefined ? !isKeepingHistory : value === 'on'
+        const row = (await $.config.list()).find(
+          one => one.key.startsWith('command-log') && one.key.endsWith('.keep_history'),
+        )
+        if (!row) return { text: 'Keep history setting not found; change it in /config.' }
+        const set = await $.config.set({ key: row.key, value: isOn })
+        if ('deny' in set && set.deny) return { text: `Keep history not changed: ${set.deny}` }
+
+        return { text: `Keep history ${isOn ? 'on' : 'off'}.` }
       }
-      await answerPrompt($)
-      await switchToFullscreen($)
-
-      return { text: 'Switching to fullscreen. This session restarts.' }
+      default:
+        return { text: USAGE }
     }
-    // Keep history is a /config row: setting it there reloads the mod with it.
-    if (/\bhistory\b/.test(e.args)) {
-      const value = /\bon\b/.test(e.args) ? true : /\boff\b/.test(e.args) ? false : !isKeepingHistory
-      const row = (await $.config.list()).find(
-        one => one.key.startsWith('command-log') && one.key.endsWith('.keep_history'),
-      )
-      if (!row) return { text: 'Keep history setting not found; change it in /config.' }
-      const set = await $.config.set({ key: row.key, value })
-      if ('deny' in set && set.deny) return { text: `Keep history not changed: ${set.deny}` }
-
-      return { text: `Keep history ${value ? 'on' : 'off'}.` }
-    }
-    // Closed by command, it stays closed as if the person had closed it.
-    if (/\bclose\b/.test(e.args)) {
-      isClosedByPerson = true
-      await $.ui.close({ id: PANE })
-      return { text: 'Command log pane closed. `/logpane` opens it again.' }
-    }
-    isClosedByPerson = false
-    await open($)
-
-    return { text: 'Command log pane opened.' }
   })
 
   on('ui.close', async ($, e, next) => {
-    if (e.id === PANE && e.origin.kind === 'person') isClosedByPerson = true
+    if (e.id === PANE && e.origin.kind === 'person') await setClosed($, true)
 
     return next(e)
   })
@@ -310,13 +356,18 @@ export const register: Register = (on, options) => {
       const { mark, color } = MARK[one.status]
       // The whole command, every line of it wrapped to the pane's width.
       one.command.split('\n').forEach((line, i) => {
-        for (const text of wrap(i === 0 ? `${mark} $ ${line}` : `    ${line}`, width, '    ')) {
+        const shown = printable(line)
+        for (const text of wrap(i === 0 ? `${mark} $ ${shown}` : `    ${shown}`, width, '    ')) {
           rows.push({ text, color, bold: true })
         }
       })
-      if (one.description) rows.push({ text: `  ${one.description}`, dim: true })
+      if (one.description) {
+        for (const text of wrap(`  ${printable(one.description)}`, width, '  ')) rows.push({ text, dim: true })
+      }
       if (one.output) {
-        for (const line of one.output.replace(/\n+$/, '').split('\n')) rows.push({ text: `  ${line}` })
+        for (const line of one.output.replace(/\n+$/, '').split('\n')) {
+          for (const text of wrap(`  ${printable(line)}`, width, '  ')) rows.push({ text })
+        }
       }
     }
 
