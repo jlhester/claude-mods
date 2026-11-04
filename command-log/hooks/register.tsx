@@ -12,7 +12,17 @@ const MAX_FOLLOWED = 5
 // rows within this, so the oldest drop off the top rather than mid-row.
 const MAX_DRAWN = 90000
 
+// The fullscreen question is asked once per install: the answer is kept in the
+// store across sessions, and in this atom so that answering redraws the pane.
+const ANSWERED_KEY = 'fullscreen-prompt-answered'
+// Set just before /tui relaunches: the new process opens the pane again, as
+// nothing else would until Claude's next command.
+const REOPEN_KEY = 'reopen-after-fullscreen'
+const NOT_DOCKED = 'Now in fullscreen. Run /logpane to show the command log.'
+const FULLSCREEN_MANUALLY = 'Could not switch to fullscreen: type /tui fullscreen instead.'
+
 const entries = atom({ plugin: 'command-log', key: 'entries' } as const, [])
+const isPromptAnswered = atom({ plugin: 'command-log', key: 'isPromptAnswered' } as const, false)
 
 const MARK: Record<LogStatus, { mark: string; color?: string }> = {
   running: { mark: '…', color: 'warning' },
@@ -167,6 +177,31 @@ async function clear($: EngineInterface) {
   await update($, entries, () => [])
 }
 
+async function answerPrompt($: EngineInterface) {
+  await update($, isPromptAnswered, () => true)
+  await $.store.set(ANSWERED_KEY, true)
+}
+
+// /tui saves the setting for every session and relaunches this one. It runs from
+// a timer, after the calling hook has returned: the engine refuses a run from a
+// command.run hook, which would wait on the turn that hook is holding.
+async function switchToFullscreen($: EngineInterface) {
+  await $.store.set(REOPEN_KEY, true)
+  $.clock.after(1, () => {
+    void $.command.run({ command: 'tui', args: 'fullscreen' }).catch(async () => {
+      await $.store.delete(REOPEN_KEY)
+      $.ui.toast(FULLSCREEN_MANUALLY)
+    })
+  })
+}
+
+async function reopenAfterSwitch($: EngineInterface) {
+  if ((await $.store.get(REOPEN_KEY)) !== true) return
+  await $.store.delete(REOPEN_KEY)
+  const opened = await $.ui.open({ id: PANE, title: TITLE })
+  if (!opened.isPlaced) $.ui.toast(NOT_DOCKED)
+}
+
 export const register: Register = (on, options) => {
   followed.clear()
   outputPaths.clear()
@@ -177,8 +212,10 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'logpane',
       description:
-        'Show the command log pane (`close` closes it, `clear` empties it, `history [on|off]` keeps finished commands)',
+        'Show the command log pane (`close` closes it, `clear` empties it, `history [on|off]` keeps finished commands, `fullscreen` moves it to the right)',
     })
+    if ((await $.store.get(ANSWERED_KEY)) === true) await update($, isPromptAnswered, () => true)
+    void reopenAfterSwitch($)
 
     return next(e)
   })
@@ -187,6 +224,15 @@ export const register: Register = (on, options) => {
     if (/\bclear\b/.test(e.args)) {
       await clear($)
       return { text: 'Command log cleared.' }
+    }
+    if (/\bfullscreen\b/.test(e.args)) {
+      if (e.presentation.isFullscreen) {
+        return { text: 'Already in fullscreen. The pane docks on the right at 110 columns or wider.' }
+      }
+      await answerPrompt($)
+      await switchToFullscreen($)
+
+      return { text: 'Switching to fullscreen. This session restarts.' }
     }
     // Keep history is a /config row: setting it there reloads the mod with it.
     if (/\bhistory\b/.test(e.args)) {
@@ -249,8 +295,14 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const list = await read($, entries)
+    // Only the terminal's main screen can gain a dock from /tui: fullscreen at
+    // under 110 columns is inline too, but switching would not change that.
+    const isOffering =
+      e.surface === 'terminal' &&
+      e.viewport?.isFullscreen === false &&
+      !(await read($, isPromptAnswered))
     const width = Math.max(10, e.props.bodyColumns)
 
     const rows: { text: string; color?: string; dim?: boolean; bold?: boolean }[] = []
@@ -282,6 +334,31 @@ export const register: Register = (on, options) => {
             {row.text || ' '}
           </Text>
         ))}
+        {isOffering && (
+          // Last, as the pane follows its end. The main screen reports no mouse
+          // clicks, so the words give the keys.
+          <Box flexDirection="column" marginTop={1}>
+            <Text bold>Show this log on the right?</Text>
+            <Text>That turns on fullscreen for all sessions and restarts this one.</Text>
+            <Text dimColor>Press ctrl+x tab, then s or n. /logpane fullscreen also does this.</Text>
+            <Box flexDirection="row" gap={1}>
+              <Button
+                key="fullscreen-switch"
+                hotkey="s"
+                variant="primary"
+                onPress={async () => {
+                  await answerPrompt($)
+                  await switchToFullscreen($)
+                }}
+              >
+                Switch
+              </Button>
+              <Button key="fullscreen-decline" hotkey="n" onPress={() => answerPrompt($)}>
+                Not now
+              </Button>
+            </Box>
+          </Box>
+        )}
       </Box>
     )
   })
